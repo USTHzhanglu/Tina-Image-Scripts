@@ -31,12 +31,11 @@ udisk_part=4
 |    cmd          |执行命令      |backup/restore |
 |      device        | 备份或还原设备所在位置     | 默认/dev/sdb，缺省值    |
 |          out_dir          |    导出镜像所在位置         |默认./out，缺省值|
-|  name |导出镜像名称|默认tina_v831-sipeed_uart0.dd.img|
 
 ### 备份镜像
 
 ```
-system_backup.sh backup /dev/sdb out test.img
+system_backup.sh backup /dev/sdb out
 ```
 
 ### 还原镜像
@@ -45,4 +44,3 @@ system_backup.sh backup /dev/sdb out test.img
 system_backup.sh restore /dev/sdb
 ```
 
-### 

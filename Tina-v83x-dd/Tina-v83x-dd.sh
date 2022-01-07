@@ -13,18 +13,19 @@ img_name=tina_v831-sipeed_uart0.dd.img
 root_part=3
 udisk_part=4
 sector_size=512
+tmp=`echo ${device} |cut -d / -f 3`
+fstype=`sudo lsblk -f |grep ${tmp}${root_part} |awk '{print $2}' ` #get filesystem type
 mkdir -p $out_dir
-p1_start=`sudo fdisk -l $device |grep ${device}1 |awk '{print $2}'`
-p1_end=`sudo fdisk -l $device |grep ${device}1 |awk '{print $3}'`
 
-p2_start=`sudo fdisk -l $device |grep ${device}2 |awk '{print $2}'`
-p2_end=`sudo fdisk -l $device |grep ${device}2 |awk '{print $3}'`
+root_start=`sudo fdisk -l $device |grep ${device}${root_part} |awk '{print $2}'`
+root_end=`sudo fdisk -l $device |grep ${device}${root_part} |awk '{print $3}'`
 
-p3_start=`sudo fdisk -l $device |grep ${device}3 |awk '{print $2}'`
-p3_end=`sudo fdisk -l $device |grep ${device}3 |awk '{print $3}'`
-boot_size=$((${p3_start} * $sector_size / 1024 / 1024))
+udisk_start=`sudo fdisk -l $device |grep ${device}${udisk_part} |awk '{print $2}'`
+udisk_end=`sudo fdisk -l $device |grep ${device}${udisk_part} |awk '{print $3}'` 
+
+boot_size=$((${root_start} * $sector_size / 1024 / 1024))
 #img_size=`sudo fdisk -l $device |grep ${device} |awk '{print $3}'|sed -n '1p'`
-img_size=$((((${p3_end} +1))* ${sector_size} / 1024 / 1024 +10))
+img_size=$((((${root_end} +1))* ${sector_size} / 1024 / 1024 +10))
 #img_size=480
 ###################################
 
@@ -43,10 +44,7 @@ sudo losetup -P /dev/loop404 ${out_dir}/${img_name}
 
 
 ((++counter)) && echo "[$counter]-- create part"
-sleep 10
-#(echo -e "\n\nd\n${udisk_part}\nd\n${root_part}\n"
-#sleep 1
-(echo -e "n\n${root_part}\n${p3_start}\n${p3_end}\n"
+(echo -e "n\n${root_part}\n${root_start}\n${root_end}\n"
 sleep 1
 echo -e "x\nn\n${root_part}\nrootfs\nu\n${root_part}\nA0085546-4166-744A-A353-FCA9272B8E48\nr\nw\n"
 )|sudo fdisk /dev/loop404
@@ -56,7 +54,7 @@ echo -e "x\nn\n${root_part}\nrootfs\nu\n${root_part}\nA0085546-4166-744A-A353-FC
 )|sudo fdisk /dev/loop404
 
 ((++counter)) && echo "[$counter]-- mkfs part"
-sudo mkfs.ext4 /dev/loop404p${root_part}
+sudo mkfs.${fstype} /dev/loop404p${root_part}
 sudo e2fsck -fyC 0 /dev/loop404p${root_part}
 sudo resize2fs -p /dev/loop404p${root_part} 
 
@@ -64,8 +62,8 @@ sudo resize2fs -p /dev/loop404p${root_part}
 mkdir -p ${out_dir}/old
 mkdir -p ${out_dir}/new
 sudo umount ${device}${root_part}
-sudo mount -t ext4 ${device}${root_part} ${out_dir}/old
-sudo mount -t ext4 /dev/loop404p${root_part} ${out_dir}/new
+sudo mount -t ${fstype} ${device}${root_part} ${out_dir}/old
+sudo mount -t ${fstype} /dev/loop404p${root_part} ${out_dir}/new
 
 ((++counter)) && echo "[$counter]---now copy rootfs,waiting---"
 (cd ${out_dir}/old;sudo tar -cf - .)|(cd ${out_dir}/new;sudo tar -xf -)
@@ -91,10 +89,30 @@ echo "====================="
 ###################################
 
 ###################################
+system_backup_squashfs()
+{
+
+((++counter)) && echo "[$counter]---now copy img,waiting---"
+sudo dd if=${device} of=${out_dir}/${img_name} bs=1M count=${img_size} status=progress  conv=notrunc
+echo -e "d\n${udisk_part}\nw\ny\n"|sudo gdisk ${out_dir}/${img_name}
+
+((++counter)) && echo "[$counter]---Compressing img,waiting---"
+cd ${out_dir}
+sudo rm -r ${img_name}.xz
+sudo xz -z -k ${img_name} --threads=0
+cd -
+echo "====================="
+echo -e "\033[32m \033[05m \nbackup complete\n \033[0m"
+echo "====================="
+}
+###################################
+
+###################################
 system_restore()
 {
 xz -dc ${out_dir}/${img_name}.xz |sudo dd of=${device} bs=1M status=progress oflag=direct
 echo -e "w\n"|sudo fdisk ${device}
+sudo umount ${device}${root_part}
 sudo e2fsck -fyC 0 ${device}${root_part}
 echo "====================="
 echo -e "\033[32m \033[05m \nrestore complete\n \033[0m"
@@ -107,12 +125,17 @@ echo "====================="
 menu()
 {
 echo "==========================================================================="
-echo -e "cmd=${select} device=${device},out_dir=${out_dir}, img_name is ${img_name}
-use \033[32m \033[05m sh backup xxx xxx xxx \033[0m to backup system
-    \033[32m \033[05m sh restore xxx xxx xxx \033[0m to restore system
+echo -e "cmd=${select} device=${device},out_dir=${out_dir}
+use \033[32m \033[05m sh backup xxx xxx \033[0m to backup system
+    \033[32m \033[05m sh restore xxx xxx \033[0m to restore system
 ==========================================================================="
 if [ "$select" = "backup" ];then
-	system_backup
+	if [ "${fstype}" = "squashfs" ];then
+	echo -e "now use dd to copy bin\n"
+		system_backup_squashfs
+	else
+		system_backup
+	fi
 elif [ "$select" = "restore" ];then
 	system_restore
 fi

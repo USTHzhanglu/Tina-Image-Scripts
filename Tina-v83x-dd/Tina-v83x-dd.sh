@@ -43,9 +43,6 @@ sudo losetup -P /dev/loop404 ${out_dir}/${img_name}
 
 
 ((++counter)) && echo "[$counter]-- create part"
-sleep 10
-#(echo -e "\n\nd\n${udisk_part}\nd\n${root_part}\n"
-#sleep 1
 (echo -e "n\n${root_part}\n${p3_start}\n${p3_end}\n"
 sleep 1
 echo -e "x\nn\n${root_part}\nrootfs\nu\n${root_part}\nA0085546-4166-744A-A353-FCA9272B8E48\nr\nw\n"

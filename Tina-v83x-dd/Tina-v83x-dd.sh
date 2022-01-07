@@ -2,28 +2,30 @@
 ###################################
 select=$1                                                                                                  
 counter=0
-###################################
-
-###################################
 device=$2
 device=${device:-/dev/sdb}
 out_dir=$3
 out_dir=${out_dir:-out}
 img_name=tina_v831-sipeed_uart0.dd.img
-root_part=3
-udisk_part=4
 sector_size=512
+###################################
+if [ "$select" = "backup" ];then
+	sudo parted -l > ${out_dir}/parted.log
+	mkdir -p $out_dir
+	sudo fdisk -l  $device > ${out_dir}/fdisk.log
+fi
+###################################
+root_part=`sudo cat  ${out_dir}/parted.log  |grep rootfs|awk '{print $1}'`
+udisk_part=`sudo cat  ${out_dir}/parted.log |grep UDISK|awk '{print $1}'`
 tmp=`echo ${device} |cut -d / -f 3`
 fstype=`sudo lsblk -f |grep ${tmp}${root_part} |awk '{print $2}' ` #get filesystem type
-mkdir -p $out_dir
+root_start=`sudo cat  ${out_dir}/fdisk.log|grep ${device}${root_part} |awk '{print $2}'`
+root_end=`sudo cat  ${out_dir}/fdisk.log|grep ${device}${root_part} |awk '{print $3}'`
 
-root_start=`sudo fdisk -l $device |grep ${device}${root_part} |awk '{print $2}'`
-root_end=`sudo fdisk -l $device |grep ${device}${root_part} |awk '{print $3}'`
+udisk_start=`echo ${fdisklog} |grep ${device}${udisk_part} |awk '{print $2}'`
+udisk_end=`echo ${fdisklog} |grep ${device}${udisk_part} |awk '{print $3}'` 
 
-udisk_start=`sudo fdisk -l $device |grep ${device}${udisk_part} |awk '{print $2}'`
-udisk_end=`sudo fdisk -l $device |grep ${device}${udisk_part} |awk '{print $3}'` 
-
-boot_size=$((${root_start} * $sector_size / 1024 / 1024))
+boot_size=$((${root_start} * ${sector_size} / 1024 / 1024))
 #img_size=`sudo fdisk -l $device |grep ${device} |awk '{print $3}'|sed -n '1p'`
 img_size=$((((${root_end} +1))* ${sector_size} / 1024 / 1024 +10))
 #img_size=480
@@ -111,7 +113,8 @@ echo "====================="
 system_restore()
 {
 xz -dc ${out_dir}/${img_name}.xz |sudo dd of=${device} bs=1M status=progress oflag=direct
-echo -e "w\n"|sudo fdisk ${device}
+echo -e "n\n${udisk_part}\n${udisk_start}\n\nx\nn\n5\nUDISK\nr\nw\n"|sudo fdisk ${device}
+sudo mkfs.vfat ${device}${udisk_part}
 sudo umount ${device}${root_part}
 sudo e2fsck -fyC 0 ${device}${root_part}
 echo "====================="

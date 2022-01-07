@@ -14,13 +14,6 @@ Device      Start    End Sectors Name Attrs
 
 其中UDISK镜像不备份。
 
-如果env和boot处在同一个分区,或存在其他分区的，则调整脚本内的
-
-```
-root_part=3
-udisk_part=4
-```
-
 只需要确保rootfs和udisk存在于分区表最后。
 
 ## 如何执行
